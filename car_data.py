@@ -49,7 +49,7 @@ temp3                 = 35.1
 # Motor Info
 rpmPercent            = 0.87
 torquePercent         = 0.4
-speed                 = 69
+speed                 = 51
 
 # Errors
 error25_5Implasible   = False                       # 25/5 APPS Implausibility from ECU

@@ -47,7 +47,7 @@ def Initialize(guiRoot):
     display  = widgets.CreateFrame(root, column=1, row=0, border=True)
     
     # Shortcut Layout
-    shortcutLambdas = [lambda: gui.SetView(gui.View.ENDURANCE), lambda: gui.SetView(gui.View.LAP), lambda: gui.SetView(gui.View.TESTING), lambda: gui.SetView(gui.View.CALIBRATION)]
+    shortcutLambdas = [lambda: print("Open Endurance View"), lambda: print("Open Lap View"), lambda: print("Open Testing View"), lambda: print("Open Settings")]
     shortcutNames = ["Endurance\nView", "Lap\nView", "Testing\nView", "Settings"]
     
     shortcuts = widgets.ButtonBarHorizontal(root, shortcutWidth, shortcutHeight, shortcutLambdas, column=1, row=1, buttonNames=shortcutNames, font=config.shortcutBarFont)
