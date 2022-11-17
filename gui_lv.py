@@ -17,7 +17,7 @@ def Initialize(gui):
     root = widgets.CreateFrame(gui, grid=False)
     root.grid_columnconfigure(0, minsize=config.SCREEN_W)
     root.grid_rowconfigure(0,    minsize=config.SCREEN_H)
-    message = widgets.CreateLabel(root, font=config.font)
+    message = widgets.CreateLabel(root, font=config.fontLarge)
     message.grid()
 
 def Update():

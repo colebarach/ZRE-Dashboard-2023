@@ -4,20 +4,22 @@
 # Date Updated: 22.10.23
 # Function: The main script of the dashboard. Responsible for initializing all systems of the dashboard.
 
+import threading
+from threading import Thread
+
 # Includes
-import car_data
 import gui
+import can
 
 # Main Execution
-def main():
+def Main():
     gui.Initialize()
+    Thread(target=can.Begin).start()
     gui.Loop()
 
-# Interrupts
-def SetDriveState(state):
-    car_data.driveState = state
-    gui.Update()
+def Close():
+    gui.Close()
+    can.Close()
 
 # Script Execution
-if __name__ == '__main__':
-    main()
+if __name__ == '__main__': Main()

@@ -11,16 +11,18 @@ from tkinter            import font
 
 # Includes
 import gui
+import gui_calibration
 import config
 import widgets
 import car_data
 
-global open
-
+# Initialization
+# - Creates instances of all necessary widgets
+# - Should only be called once per session
 def Initialize(guiRoot):
     # Root Declaration
     global root
-    root = widgets.CreateFrame(guiRoot, grid=False)
+    root = widgets.ThemeFrame(guiRoot, grid=False)
 
     # Root Partitioning
     displayWidth   = config.SCREEN_W - 2*config.sideBarWidths
@@ -38,27 +40,23 @@ def Initialize(guiRoot):
     root.rowconfigure   (1, minsize=shortcutHeight) # Shortcut Bar
 
     # Root Widgets
+    #   Shortcut Options
+    shortcutCommands = [0,0,0,0]
+    shortcutNames    = ["Endurance\nView", "Lap\nView", "Testing\nView", "Settings"]
+    #   Widgets
     global brakeBar
     global appsBar
-    global display
-    global shortcuts
-    brakeBar = widgets.ProgressBarVertical(root, sideBarWidth, sideBarHeight, column=0, rowspan=2, border=True, font=config.sideBarFont, lowlightColor=config.sideBarBrakeColor, text=config.sideBarBrakeLabel)
-    appsBar  = widgets.ProgressBarVertical(root, sideBarWidth, sideBarHeight, column=2, rowspan=2, border=True, font=config.sideBarFont, lowlightColor=config.sideBarAppsColor,  text=config.sideBarAppsLabel)
-    display  = widgets.CreateFrame(root, column=1, row=0, border=True)
+    brakeBar  = widgets.ThemeProgressBar(root, sideBarWidth, sideBarHeight, "Vertical", column=0, row=0, rowspan=2, border=True, text=config.sideBarBrakeLabel, foreground=config.sideBarBrakeColor)
+    display   = widgets.ThemeFrame      (root,                                          column=1, row=0, border=True)
+    shortcuts = widgets.ThemeButtonBar  (root, shortcutWidth, shortcutHeight, "Horizontal", shortcutCommands, buttonLabels=shortcutNames, column=1, row=1)
+    appsBar   = widgets.ThemeProgressBar(root, sideBarWidth, sideBarHeight, "Vertical", column=2, row=0, rowspan=2, border=True, text=config.sideBarAppsLabel,  foreground=config.sideBarAppsColor)
     
-    # Shortcut Layout
-    shortcutLambdas = [lambda: print("Open Endurance View"), lambda: print("Open Lap View"), lambda: print("Open Testing View"), lambda: print("Open Settings")]
-    shortcutNames = ["Endurance\nView", "Lap\nView", "Testing\nView", "Settings"]
-    
-    shortcuts = widgets.ButtonBarHorizontal(root, shortcutWidth, shortcutHeight, shortcutLambdas, column=1, row=1, buttonNames=shortcutNames, font=config.shortcutBarFont)
-     
     # Display Partitioning
-    displayInteriorWidth   = displayWidth  - config.padding*4
-    displayInteriorHeight  = displayHeight - config.padding*4
-    rpmBarWidth            = displayInteriorWidth - config.padding*2
+    displayInteriorWidth   = displayWidth  - config.themePadding*4 # Interior and Exterior Padding
+    displayInteriorHeight  = displayHeight - config.themePadding*4 # Interior and Exterior Padding
     rpmBarHeight           = config.rpmBarHeight
     rpmLabelsHeight        = config.rpmBarLabelHeight
-    rpmDividerHeight       = config.borderWidth
+    rpmDividerHeight       = config.themeBorderWidth
     speedHeight            = config.displayNumberHeight
     speedWidth             = config.displayNumberWidth
     infoPanelWidth         = config.infoPanelWidth
@@ -89,18 +87,18 @@ def Initialize(guiRoot):
     global speedStat
     global torqueBar
 
-    rpmBar         = widgets.StratifiedBarHorizontal(display, rpmBarWidth, rpmBarHeight, column=0, row=0, columnspan=3, maskLeft=60, maskRight=0, rangeColorsHigh=config.rpmHighColors, rangeColorsLow=config.rpmLowColors, rangeValues=config.rpmRanges)
-    rpmDivider     = widgets.CreateDividerHorizontal(display, displayInteriorWidth,      column=0, row=1, columnspan=3)
-    rpmLabels      = widgets.LabelBarHorizontal(display, rpmBarWidth, rpmLabelsHeight,   column=0, row=2, columnspan=3, labelNames=config.rpmLabelValues, font=config.rpmBarFont)
-    infoPanel      = widgets.CreateFrame(display, column=0, row=3, rowspan=3, grid=True, sticky="W")
-    speedStat      = widgets.CreateLabel(display, column=1, row=4, grid=True, font=config.displayNumberStatFont, sticky="S")
-    speedLabel     = widgets.CreateLabel(display, column=2, row=4, grid=True, text=config.displayNumberSpeedText, font=config.displayNumberLabelFont, sticky="SW")
-    torqueBarLabel = widgets.CreateLabel(display, column=1, row=6, grid=True, text=config.torqueBarText, font=config.torqueBarTextFont)
-    torqueBar      = widgets.ProgressBarHorizontal(display, torqueBarWidth, torqueBarHeight, column=0, row=7, columnspan=3, border=True, lowlightColor=config.torqueBarColor)
+    rpmBar         = widgets.ThemeStrataBar(display, displayInteriorWidth, rpmBarHeight, "Horizontal", grid=True, column=0, row=0, columnspan=3, highlightPalette=config.rpmHighlight, lowlightPalette=config.rpmLowlight, paletteDomain=config.rpmDomain, maskLeft=5/6)
+    rpmDivider     = widgets.ThemeDividerHorizontal(display, displayInteriorWidth,      column=0, row=1, columnspan=3)
+    # rpmLabels      = widgets.LabelBarHorizontal(display, rpmBarWidth, rpmLabelsHeight,   column=0, row=2, columnspan=3, labelNames=config.rpmLabelValues, font=config.rpmBarFont)
+    infoPanel      = widgets.ThemeFrame(display, grid=True, column=0, row=3, rowspan=3, sticky="W")
+    speedStat      = widgets.ThemeLabelStat(display, grid=True, column=1, row=4,        sticky="S", font=config.themeFontExtraLarge)
+    speedLabel     = widgets.ThemeLabel(display, grid=True, column=2, row=4,            sticky="SW", text=config.displayNumberSpeedText)
+    torqueBarLabel = widgets.ThemeLabel(display, grid=True, column=1, row=6,            sticky="S",  text=config.torqueBarText, font=config.themeFontSmall)
+    torqueBar      = widgets.ThemeProgressBar(display, torqueBarWidth, torqueBarHeight, "Horizontal", column=0, row=7, columnspan=3, border=True, foreground=config.themeBlue)
 
     # Info Panel Partitioning
     infoStatWidth     = config.infoPanelStatWidth
-    infoDividerHeight = config.borderWidth
+    infoDividerHeight = config.themeBorderWidth
     infoPaddingWidth  = config.infoPanelSidePadding
     infoLabelWidth    = infoPanelWidth - infoStatWidth - 2*infoPaddingWidth
     infoStatHeight    = (infoPanelHeight - 2*infoDividerHeight) / 4
@@ -118,44 +116,55 @@ def Initialize(guiRoot):
     infoPanel.rowconfigure(5, minsize=infoDividerHeight) # Divider
     
     # Info Panel Widgets
-    global chargeValue
-    global temp1Value
-    global temp2Value
-    global temp3Value
+    global chargeStat
+    global temp1Stat
+    global temp2Stat
+    global temp3Stat
 
-    infoUpperDivider = widgets.CreateDividerHorizontal(infoPanel, infoPanelWidth, grid=True, column=1, row=0, columnspan=2)
-    chargeValue      = widgets.CreateLabel(infoPanel, grid=True, column=2, row=1, font=config.infoPanelStatFont, sticky="E")
-    temp1Value       = widgets.CreateLabel(infoPanel, grid=True, column=2, row=2, font=config.infoPanelStatFont, sticky="E")
-    temp2Value       = widgets.CreateLabel(infoPanel, grid=True, column=2, row=3, font=config.infoPanelStatFont, sticky="E")
-    temp3Value       = widgets.CreateLabel(infoPanel, grid=True, column=2, row=4, font=config.infoPanelStatFont, sticky="E")
-    chargeLabel      = widgets.CreateLabel(infoPanel, grid=True, column=1, row=1, text="SoC: ",    font=config.infoPanelLabelFont, sticky="W")
-    temp1Label       = widgets.CreateLabel(infoPanel, grid=True, column=1, row=2, text="Temp 1: ", font=config.infoPanelLabelFont, sticky="W")
-    temp2Label       = widgets.CreateLabel(infoPanel, grid=True, column=1, row=3, text="Temp 2: ", font=config.infoPanelLabelFont, sticky="W")
-    temp3Label       = widgets.CreateLabel(infoPanel, grid=True, column=1, row=4, text="Temp 3: ", font=config.infoPanelLabelFont, sticky="W")
-    infoLowerDivider = widgets.CreateDividerHorizontal(infoPanel, infoPanelWidth, grid=True, column=1, row=5, columnspan=2)
+    infoUpperDivider = widgets.ThemeDividerHorizontal(infoPanel, infoPanelWidth, grid=True, column=1, row=0, columnspan=2)
+    chargeStat       = widgets.ThemeLabelStat(infoPanel, grid=True, column=2, row=1, sticky="E")
+    temp1Stat        = widgets.ThemeLabelStat(infoPanel, grid=True, column=2, row=2, sticky="E")
+    temp2Stat        = widgets.ThemeLabelStat(infoPanel, grid=True, column=2, row=3, sticky="E")
+    temp3Stat        = widgets.ThemeLabelStat(infoPanel, grid=True, column=2, row=4, sticky="E")
+    chargeLabel      = widgets.ThemeLabel(infoPanel, grid=True, column=1, row=1, text="SoC: ",    sticky="W")
+    temp1Label       = widgets.ThemeLabel(infoPanel, grid=True, column=1, row=2, text="Temp 1: ", sticky="W")
+    temp2Label       = widgets.ThemeLabel(infoPanel, grid=True, column=1, row=3, text="Temp 2: ", sticky="W")
+    temp3Label       = widgets.ThemeLabel(infoPanel, grid=True, column=1, row=4, text="Temp 3: ", sticky="W")
+    infoLowerDivider = widgets.ThemeDividerHorizontal(infoPanel, infoPanelWidth, grid=True, column=1, row=5, columnspan=2)
 
+# Update
+# - Sends current data to appropriate widgets
+# - Can be called when view is open or closed
 def Update():
-    brakeBar.SetBar(car_data.brake1Percent)
-    appsBar.SetBar(car_data.apps1Percent)
-    rpmBar.SetBar(car_data.rpmPercent)
-    torqueBar.SetBar(car_data.torquePercent)
-    speedStat['text']   = car_data.speed
-    chargeValue['text'] = car_data.stateOfCharge
-    temp1Value['text']  = car_data.temp1
-    temp2Value['text']  = car_data.temp2
-    temp3Value['text']  = car_data.temp3
-    chargeValue['foreground'] = config.colorGreen
-    temp1Value['foreground']  = config.GetTemperatureColor(car_data.temp1)
-    temp2Value['foreground']  = config.GetTemperatureColor(car_data.temp2)
-    temp3Value['foreground']  = config.GetTemperatureColor(car_data.temp3)
+    global brakeBar
+    global appsBar
+    global rpmBar
+    global torqueBar
+    global speedStat
+    global chargeStat
+    global temp1Stat
+    global temp2Stat
+    global temp3Stat
 
+    brakeBar.Set  (car_data.brake1Percent       / 100)
+    appsBar.Set   (car_data.apps1Percent        / 100)
+    rpmBar.Set    (car_data.rpmPercent          / 100)
+    torqueBar.Set (car_data.torquePercentageMax / 100)
+    speedStat.Set (car_data.speedMph)
+    chargeStat.Set(car_data.stateOfCharge)
+    temp1Stat.Set (car_data.temp1)
+    temp2Stat.Set (car_data.temp2)
+    temp3Stat.Set (car_data.temp3)
+
+# Open
+# - Packs and updates the view
 def Open():
-    global open
-    open = True
+    global root
     root.pack()
-    Update()
+    # Update()
 
+# Close
+# - Unpacks the view
 def Close():
-    global open
-    open = False
+    global root
     root.forget()
