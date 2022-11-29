@@ -11,7 +11,7 @@ from threading import Thread
 import gui
 import can
 
-# Main Execution
+# Initialization
 def Main():
     gui.Initialize()
     Thread(target=can.Begin).start()
@@ -21,5 +21,5 @@ def Close():
     gui.Close()
     can.Close()
 
-# Script Execution
+# Execution
 if __name__ == '__main__': Main()

@@ -1,15 +1,11 @@
 # Libraries
-import tkinter
-from tkinter            import *
-from tkinter            import font
-
 import enum
 from enum import Enum
 
 # Includes
 import config
 import car_data
-import widgets
+import lib_tkinter
 import can
 
 # Calibration States
@@ -41,10 +37,10 @@ def Initialize(gui):
     global open
     
     open = False
-    root = widgets.CreateFrame(gui, grid=False)
+    root = lib_tkinter.DashFrame(gui, grid=False)
     root.grid_columnconfigure(0, minsize=config.SCREEN_W)
     root.grid_rowconfigure(0,    minsize=config.SCREEN_H)
-    message = widgets.CreateLabel(root)
+    message = lib_tkinter.DashLabel(root)
     message.grid()
 
 # View Update Interrupt

@@ -2,45 +2,101 @@
 # Author: Cole Barach
 # Date Created: 22.09.28
 # Date Updated: 22.10.23
-# Function: The main script for CAN communications. Responsible for handling all messages from the CAN receivers and 
+# Function: The main script for CAN communications. Responsible for handling and sending all CAN messages.
 
 # Libraries
-import os
 import sys
+import time
 
 # Includes
 import car_data
-import can_windows
+import lib_canlib
+import can_emulator
 import gui
 import config
 
-online = True
-
+# Begin
+# - Call to Begin the CAN Thread, does not return
+# - Initializes and Begins the Update Loop
 def Begin():
     Initialize()
-    Update()
+    UpdateLoop()
 
+# Initialize
+# - Must be called before any script usage.
+# - Initializes parent library and sets up references.
 def Initialize():
     global canMaster
-    print("CAN - Initializing...")
-    if(sys.platform == 'win32'): canMaster = can_windows
-    canMaster.Initialize()
+    global online
 
-def Update():
+    global ecuTimeout
+    global acanTimeout
+    global inverterTimeout
+    global bmsTimeout
+    ecuTimeout      = 0
+    acanTimeout     = 0
+    inverterTimeout = 0
+    bmsTimeout      = 0
+    
+    online = True
+    print("CAN - Initializing...")
+    if(config.emulateCan):
+        canMaster = can_emulator
+    else:
+        if(sys.platform == 'win32'): canMaster = lib_canlib
+    canMaster.Initialize(config.CAN_BITRATE, HandleMessage)
+
+# Update Loop
+# - Call to Begin the CAN Update Loop, does not return
+# - Periodically Scans for and Handles incoming Messages
+def UpdateLoop():
     global canMaster
     global online
+    global ecuTimeout
+    global acanTimeout
+    global inverterTimeout
+    global bmsTimeout
+    
     print("CAN - Loop Starting...")
     while(online):
-        canMaster.Update()
+        Update()
+        time.sleep(0.001)
+
     print("CAN - Loop Ended")
     canMaster.Close()
 
+def Update():
+    global canMaster
+    global ecuTimeout
+    global acanTimeout
+    global inverterTimeout
+    global bmsTimeout
+    
+    canMaster.Update()
+    
+    currentTime = time.time()
+    if(currentTime - ecuTimeout      > config.canMessageTimeout): car_data.ecuCanActive      = False
+    if(currentTime - acanTimeout     > config.canMessageTimeout): car_data.acanCanActive     = False
+    if(currentTime - inverterTimeout > config.canMessageTimeout): car_data.inverterCanActive = False
+    if(currentTime - bmsTimeout      > config.canMessageTimeout): car_data.bmsCanActive      = False
+
+# Close
+# - Call to Close the CAN Thread
+# - Kills the UpdateLoop
 def Close():
     global online
     online = False
     print("CAN - Closing...")
 
 # Message Handling ----------------------------------------------------------------------------------------
+def HandleMessage(id, data):
+    if(id == config.CAN_ID_INPUT_PEDALS): HandleInputPedals(data)
+    if(id == config.CAN_ID_DATA_MOTOR):   HandleDataMotor(data)
+    if(id == config.CAN_ID_DATA_PEDALS):  HandleDataPedals(data)
+    if(id == config.CAN_ID_STATUS_ECU):   HandleStatusEcu(data)
+    for index in range(config.CAN_ID_CELL_VOLTAGES_END - config.CAN_ID_CELL_VOLTAGES_START + 1):
+        idIndex = config.CAN_ID_CELL_VOLTAGES_START + index
+        if(id == idIndex): HandleCellVoltages(data, idIndex)
 
 # Message 0x005 - Pedal Data from ACAN
 def HandleInputPedals(data):
@@ -52,11 +108,13 @@ def HandleInputPedals(data):
     car_data.brake1   = data[4] | (data[5] << 8)
     # Bytes 6 & 7
     car_data.brake2   = data[6] | (data[7] << 8)
+    ClearTimeoutAcan()
 
+# Message 0x0A5 - Motor Data from Inverter
 def HandleDataMotor(data):
-    car_data.rpm = InterpretSignedNBitInt(data[2] | (data[3] << 8))
-    car_data.rpmPercent =       abs(100 * car_data.rpm / config.RPM_MAX)
-    car_data.speedMph   = round(abs(car_data.rpm * config.RPM_TO_MPH_SCALE))
+    car_data.motorRpm      = InterpretSignedNBitInt(data[2] | (data[3] << 8))
+    car_data.motorSpeedMph = int(abs(RpmToMph(car_data.motorRpm)))
+    ClearTimeoutInverter()
 
 # Message 0x701 - Pedal Data from ECU
 def HandleDataPedals(data):
@@ -68,6 +126,7 @@ def HandleDataPedals(data):
     car_data.brake1Percent = (data[4] | (data[5] << 8)) * config.BRAKE_1_PERCENT_SCALE
     # Byte 3
     car_data.brake2Percent = (data[6] | (data[7] << 8)) * config.BRAKE_2_PERCENT_SCALE
+    ClearTimeoutEcu()
 
 # Message 0x703 - Status Message from ECU
 def HandleStatusEcu(data):
@@ -96,9 +155,24 @@ def HandleStatusEcu(data):
     #   Ignore, data is invalid
     # GUI Updates
     gui.UpdateDriveState()
+    ClearTimeoutEcu()
 
+# Messages 0x401 - 0x417
+def HandleCellVoltages(data, id):
+    cellOffset = (id - config.CAN_ID_CELL_VOLTAGES_START) * 4
+    # BMS uses Motorola Byte Order, Lo Byte is 1, Hi Byte is 0
+    car_data.cellVoltages[cellOffset]   = (data[1] | (data[0] << 8)) * 0.0001
+    car_data.cellVoltages[cellOffset+1] = (data[3] | (data[2] << 8)) * 0.0001
+    if(id == config.CAN_ID_CELL_VOLTAGES_END): return
+    car_data.cellVoltages[cellOffset+2] = (data[5] | (data[4] << 8)) * 0.0001
+    car_data.cellVoltages[cellOffset+3] = (data[7] | (data[6] << 8)) * 0.0001
+    ClearTimeoutBms()
 
 # Message Transmitting ------------------------------------------------------------------------------------
+def SendMessage(id, data, main=True):
+    global canMaster
+    if(main): canMaster.Send(id, data, 0)
+    else:     canMaster.Send(id, data, 1)
 
 # Message 0x533
 def SendCommandAppsCalibration():
@@ -113,7 +187,7 @@ def SendCommandAppsCalibration(apps1MinValue, apps1MaxValue, apps2MinValue, apps
     message[5] = (apps2MinValue >> 8) & 0xFF
     message[6] = (apps2MaxValue)      & 0xFF
     message[7] = (apps2MaxValue >> 8) & 0xFF
-    canMaster.Send(config.CAN_ID_COMMAND_APPS_CALIBRATION, message)
+    SendMessage(config.CAN_ID_COMMAND_APPS_CALIBRATION, message)
 
 def SendInputPedals(apps1, apps2, brake1, brake2):
     message = [0,0,0,0,0,0,0,0]
@@ -125,7 +199,7 @@ def SendInputPedals(apps1, apps2, brake1, brake2):
     message[5] = (brake1 >> 8) & 0xFF
     message[6] = (brake2)      & 0xFF
     message[7] = (brake2 >> 8) & 0xFF
-    canMaster.Send(config.CAN_ID_INPUT_PEDALS, message)
+    SendMessage(config.CAN_ID_INPUT_PEDALS, message)
 
 def SendDataMotor(motorAngle, motorRpm, motorFrequency, motorDeltaResolver):
     message = [0,0,0,0,0,0,0,0]
@@ -137,7 +211,7 @@ def SendDataMotor(motorAngle, motorRpm, motorFrequency, motorDeltaResolver):
     message[5] = ((motorFrequency * 10) >> 8) & 0xFF
     message[6] =  (motorDeltaResolver)        & 0xFF
     message[7] =  (motorDeltaResolver >> 8)   & 0xFF
-    canMaster.Send(config.CAN_ID_DATA_MOTOR, message)
+    SendMessage(config.CAN_ID_DATA_MOTOR, message)
 
 def SendDataPedals(apps1Percent, apps2Percent, brake1Percent, brake2Percent):
     message = [0,0,0,0,0,0,0,0]
@@ -149,7 +223,7 @@ def SendDataPedals(apps1Percent, apps2Percent, brake1Percent, brake2Percent):
     message[5] = int(brake1Percent / config.BRAKE_1_PERCENT_SCALE) >> 8 & 0xFF
     message[6] = int(brake2Percent / config.BRAKE_2_PERCENT_SCALE)      & 0xFF
     message[7] = int(brake2Percent / config.BRAKE_2_PERCENT_SCALE) >> 8 & 0xFF
-    canMaster.Send(config.CAN_ID_DATA_PEDALS, message)
+    SendMessage(config.CAN_ID_DATA_PEDALS, message)
 
 def SendStatusEcu(driveStateInput, acceleratingInput, brakingInput, drsInput, regenInput, is25_5Input, inverterInput, acanInput, is100msInput, torquePercentInput, regenPercentInput, voltageLvInput, resistanceImdInput):
     message = [0,0,0,0,0,0,0,0]
@@ -173,10 +247,32 @@ def SendStatusEcu(driveStateInput, acceleratingInput, brakingInput, drsInput, re
     # Bytes 6 & 7
     message[6] = (int(resistanceImdInput))      & 0xFF
     message[7] = (int(resistanceImdInput) >> 8) & 0xFF
-    canMaster.Send(config.CAN_ID_STATUS_ECU, message)
+    SendMessage(config.CAN_ID_STATUS_ECU, message)
+
+# Message Timeouts ----------------------------------------------------------------------------------------
+def ClearTimeoutEcu():
+    global ecuTimeout
+    ecuTimeout = time.time()
+    car_data.ecuCanActive = True
+def ClearTimeoutAcan():
+    global acanTimeout
+    acanTimeout = time.time()
+    car_data.acanCanActive = True
+def ClearTimeoutInverter():
+    global inverterTimeout
+    inverterTimeout = time.time()
+    car_data.inverterCanActive = True
+def ClearTimeoutBms():
+    global bmsTimeout
+    bmsTimeout = time.time()
+    car_data.bmsCanActive = True
 
 # Data Interpretation -------------------------------------------------------------------------------------
-
 def InterpretSignedNBitInt(value, bitCount=16):
     if(value > 2 ** (bitCount-1)): value -= 2 ** bitCount
     return value
+
+def RpmToMph(rotationsPerMinute):
+    radiansPerMinute = rotationsPerMinute * config.RADIANS_PER_ROTATION * config.MOTOR_TEETH_COUNT / config.SPROCKET_TEETH_COUNT
+    speedMph = radiansPerMinute * config.TIRE_RADIUS_INCHES * config.MINUTES_PER_HOUR / (config.INCHES_PER_FOOT * config.FEET_PER_MILE)
+    return speedMph
