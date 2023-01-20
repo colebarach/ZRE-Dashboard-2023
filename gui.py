@@ -1,101 +1,212 @@
-# Title: GUI Main
-# Author: Cole Barach
-# Date Created: 22.09.28
-# Date Updated: 22.10.23
-# Function: GUI main script. Responsible for initialization and management of the views of the dashboard.
-
 # Libraries
 import tkinter
-from tkinter            import *
-from tkinter            import font
 
-# Includes
-import config
-import car_data
+# Objects
+class View():
+    def __init__(self, parent, id, style, database):
+        self.parent   = parent
+        self.id       = id
+        self.style    = style
+        self.database = database
+        
+        self.root   = lib_tkinter.GetFrame(parent, style, grid=False)
+        self.open   = False
 
-import gui_lv
+    def Open(self):
+        self.root.pack(expand=True, fill="both")
+        self.open = True
+
+    def Close(self):
+        self.root.forget()
+        self.open = False
+
+    def Update(self):
+        return
+
+class Window():
+    def __init__(self, parent, id, style):
+        self.parent = parent
+        self.id     = id
+        self.style  = style
+        self.open   = False
+
+    def Open(self):
+        self.root = tkinter.Toplevel(self.parent)
+        self.open = True
+
+    def Close(self):
+        self.root.destroy()
+        self.open = False
+
+    def Toggle(self):
+        if(self.open):
+            self.Close()
+        else:
+            self.Open()
+
+# Imports
+import lib_tkinter
+import gui_main
 import gui_speed
 import gui_endurance
-import gui_calibration
 import gui_bms
+import gui_calibration
 import gui_debug
 
-views = [gui_lv, gui_speed, gui_endurance]
-currentView = gui_lv
+FRAMERATE = 32
 
-# GUI Initialization
-def Initialize():
-    global gui
-    print("GUI - Initializing...")
-    gui = Tk()
-    gui.title("Dashboard 2023 - Rev.0")
-    gui.geometry(str(config.SCREEN_W) + 'x' + str(config.SCREEN_H))
-    gui.resizable(0, 0)
+def Setup(database):
+    # Instance GUI
+    gui = Main("Dashboard 2023 - Rev.2", database, FRAMERATE)
+    gui.geometry('1024x600')
 
-    gui_debug.Initialize(gui)
-
-    InitializeViews()
-    SetView()
-
-    InitializeInterrupts()
-
-    UpdateLoop()
-
-# GUI Update Interrupt
-def UpdateLoop():
-    global gui
-    currentView.Update()
-    gui.after(100, UpdateLoop)
-
-def Close():
-    print("GUI - Closing...")
-    global gui
-    gui.destroy()
-
-# Close all views
-def ClearViews():
-    for view in views:
-        view.Close()
-
-# Initialize all views
-def InitializeViews():
-    for view in views:
-        view.Initialize(gui)
-
-def SetView(view = currentView):
-    global currentView
-    print("GUI - Set View:", view.__name__)
-    driveEnabled = car_data.driveState == car_data.DriveState.HV_DRIVEON
-    if(not driveEnabled):
-        currentView = gui_lv
-    else:
-        currentView = view
-    currentView = view
-    ClearViews()
-    currentView.Open()
-
-def UpdateDriveState():
-    if(car_data.driveState == car_data.driveStatePrime): return
+    # Import Styles
+    dash  = lib_tkinter.Style("Style_Dash.json")
+    debug = lib_tkinter.Style("Style_Debug.json")
     
-    car_data.driveStatePrime = car_data.driveState
+    # Instance Views
+    menu = gui_main.View(gui, id="Menu", style=dash, database=database)
+    gui.AppendView(menu)
+    gui.AppendView(gui_speed.View      (gui, id="Speed",       style=dash, database=database))
+    gui.AppendView(gui_endurance.View  (gui, id="Endurance",   style=dash, database=database))
+    gui.AppendView(gui_bms.View        (gui, id="Bms",         style=dash, database=database))
+    gui.AppendView(gui_calibration.View(gui, id="Calibration", style=dash, database=database))
+
+    # Setup Menu
+    menu.AppendShortcut(id="Speed",       icon=r'icons\Speed.png',       iconSampling=(0.5, 0.5))
+    menu.AppendShortcut(id="Endurance",   icon=r'icons\Endurance.png',   iconSampling=(0.5, 0.5))
+    menu.AppendShortcut(id="Bms",         icon=r'icons\Bms.png',         iconSampling=(0.5, 0.5))
+    menu.AppendShortcut(id="Calibration", icon=r'icons\Calibration.png', iconSampling=(0.5, 0.5))
+    menu.AppendShortcut(id="", icon=r'icons\Calibration.png', iconSampling=(0.5, 0.5))
+    menu.AppendShortcut(id="", icon=r'icons\Calibration.png', iconSampling=(0.5, 0.5))
     
-    if(car_data.driveState == car_data.DriveState.HV_DRIVEON):   SetView(gui_speed)
-    if(car_data.driveState == car_data.DriveState.HV_DRIVEOFF):  SetView(gui_lv)
-    if(car_data.driveState == car_data.DriveState.LV_DRIVEOFF):  SetView(gui_lv)
-    if(car_data.driveState == car_data.DriveState.INITIALIZING): SetView(gui_lv)
+    # Open Menu
+    gui.CloseViews()
 
-# Keyboard Input
-def KeyInterrupt(event):
-    if(event.keysym == "F2"): gui_debug.Toggle()
+    # Instance Sub-Windows
+    gui.AppendWindow(gui_debug.Window(gui, id="Debug", style=debug))
+    
+    # Setup Keybinds
+    gui.AppendKeybind("F2", lambda: gui.ToggleWindow("Debug"))
 
-def InitializeInterrupts():
-    gui.bind('<Key>', KeyInterrupt)
+    return gui
 
-# GUI Main Loop
-def Loop():
-    global gui
-    print("GUI - Loop Starting...")
-    gui.mainloop()
-    # TEMPORARY. FOR DEBUG PURPOSES ONLY
-    import can
-    can.Close()
+class Main(tkinter.Tk):
+    def __init__(self, title, database, framerate=0):
+        print("GUI - Initializing...")
+        super().__init__()
+
+        self.title(title)
+
+        self.database = database
+
+        self.InitializeViews()
+        self.InitializeWindows()
+        self.InitializeKeybinds()
+
+        self.framerate = framerate
+
+        print("GUI - Initialized.")
+
+    # Views -----------------------------------------------------------------------------------
+    def InitializeViews(self):
+        self.views = []
+        self.activeView = None
+
+    def AppendView(self, view):
+        self.views.append(view)
+
+    def OpenView(self, view):
+        # Open by ID
+        if(type(view) == type("")):
+            viewId = view
+            view = None
+            for targetView in self.views:
+                if(targetView.id == viewId):
+                    view = targetView
+                    break
+            if(view == None):
+                print("GUI - Could not find view of ID '" + viewId + "'")
+                return
+        
+        # Open by Reference
+        if(issubclass(type(view), View)):
+            self.CloseViews(openDefaultView=False)
+            view.Open()
+            self.activeView = view
+            return
+
+        # Invalid Object
+        print("GUI - Object '" + str(type(view)) + "' must inherit from 'gui.View")
+
+    def CloseViews(self, openDefaultView=True):
+        self.activeView = None
+        for view in self.views:
+            view.Close()
+        if(openDefaultView):
+            self.views[0].Open()
+            self.activeView = self.views[0]
+
+    # Windows ---------------------------------------------------------------------------------
+    def InitializeWindows(self):
+        self.windows = []
+
+    def AppendWindow(self, window):
+        self.windows.append(window)
+
+    def ToggleWindow(self, window):
+        # Open by ID
+        if(type(window) == type("")):
+            windowId = window
+            window = None
+            for targetWindow in self.windows:
+                if(targetWindow.id == windowId):
+                    window = targetWindow
+                    break
+            if(window == None):
+                print("GUI - Could not find window of ID '" + windowId + "'")
+                return
+        
+        # Open by Reference
+        if(issubclass(type(window), Window)):
+            window.Toggle()
+            return
+
+        # Invalid Object
+        print("GUI - Object '" + str(type(window)) + "' must inherit from 'gui.View")
+
+    # Keybinds --------------------------------------------------------------------------------
+    def InitializeKeybinds(self):
+        self.bind('<Key>', self.KeybindInterrupt)
+        self.keybindValues   = []
+        self.keybindCommands = []
+
+    def AppendKeybind(self, key, command):
+        self.keybindValues.append(key)
+        self.keybindCommands.append(command)
+
+    def KeybindInterrupt(self, event):
+        for index in range(len(self.keybindValues)):
+            if(event.keysym == self.keybindValues[index]): self.keybindCommands[index]()
+
+    # Behavior --------------------------------------------------------------------------------
+    def Update(self):
+        if(self.activeView != None):
+            self.activeView.Update()
+
+    def Loop(self):
+        if(self.framerate == 0 or self.framerate == None): return
+        delayMilliseconds = int(1000 / self.framerate)
+        
+        self.Update()
+        self.after(delayMilliseconds, self.Loop)
+
+    def Begin(self):
+        print("GUI - Loop Starting...")
+        self.Loop()
+        self.mainloop()
+        print("GUI - Loop Terminated.")
+
+    def Kill(self):
+        if(self.state != 'normal'): return
+        self.destroy()

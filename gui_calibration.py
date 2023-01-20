@@ -1,131 +1,101 @@
-# Libraries
 import enum
 from enum import Enum
 
-# Includes
-import config
-import car_data
 import lib_tkinter
+from lib_tkinter import Orientation
+
+import gui
+import config
+
 import can
 
-# Calibration States
-#   Start               - Buffer menu to avoid accidental calibration
-#   Request_Pedals_None - For minimum values, tells the driver to not touch pedals
-#   Request_Pedals_APPS - For maximum values, tells the driver to press throttle
-#   Finished            - For valid calibration only
-#   Failed              - When calibration values were invalid
-class CalibrationState(Enum):
-    START                = 0,
-    REQUEST_APPS_MIN     = 1,
-    REQUEST_APPS_MAX     = 2,
-    FINISHED             = 3,
-    FAILED               = 4
-calibrationState = CalibrationState.START
+class CalibrationState(Enum): # State of Calibration
+    START                = 0, # - Buffer menu to avoid accidental calibration
+    REQUEST_APPS_MIN     = 1, # - For minimum values, tells the driver to not touch pedals
+    REQUEST_APPS_MAX     = 2, # - For maximum values, tells the driver to press throttle
+    FINISHED             = 3, # - For Valid Calibration Only
+    FAILED               = 4  # - For Invalid Calibration
 
-# Current Calibration Values
-# - Will be reset when exiting calibration mode
-apps1CurrentMin     = 0
-apps1CurrentMax     = 0
-apps2RawCurrentMin  = 0
-apps2RawCurrentMax  = 0
+class View(gui.View):
+    def __init__(self, parent, id, style, database):
+        # Root --------------------------------------------------------------------------------------------------------------------------------------------------------
+        super().__init__(parent, id, style, database)
 
-# View Initialization
-# - Call before using any other functions
-def Initialize(gui):
-    global root
-    global message
-    global open
-    
-    open = False
-    root = lib_tkinter.DashFrame(gui, grid=False)
-    root.grid_columnconfigure(0, minsize=config.SCREEN_W)
-    root.grid_rowconfigure(0,    minsize=config.SCREEN_H)
-    message = lib_tkinter.DashLabel(root)
-    message.grid()
+        # Root Partitioning -----------------------------------------------------------------------------------
+        shortcutCommands = [lambda: self.parent.CloseViews(),
+                            lambda: self.InputInterrupt(0),
+                            lambda: self.InputInterrupt(1),
+                            0]
+        shortcutLabels   = ["Back", 
+                            "Next",
+                            "Reset",
+                            ""]
+        
+        self.root.columnconfigure(index=0, weight=1)
+        self.root.rowconfigure(   index=0, weight=1)
+        self.root.rowconfigure(   index=1, weight=0)
 
-# View Update Interrupt
-def Update():
-    global calibrationState
-    global open
-    global message
+        # Root Widgets ----------------------------------------------------------------------------------------
+        self.message   = lib_tkinter.GetLabel    (self.root, column=0, row=0, style=style, sticky="EW")
+        self.shortcuts = lib_tkinter.GetButtonBar(self.root, column=0, row=1, style=style, sticky="EW", minHeight=80, commands=shortcutCommands, labels=shortcutLabels, orientation=Orientation.HORIZONTAL)
 
-    if(calibrationState == CalibrationState.START):
-        # Start Menu
-        message['text'] = "Press button 1 to start calibration"
-    elif(calibrationState == CalibrationState.REQUEST_APPS_MIN):
-        # No Pedals Menu
-        message['text'] = "Release both pedals, then press button 1"
-    elif(calibrationState == CalibrationState.REQUEST_APPS_MAX):
-        # APPS Pedal Menu
-        message['text'] = "Press the throttle fully, then press button 1"
-    elif(calibrationState == CalibrationState.FINISHED):
-        # Finished Menu
-        message['text'] = "Calibration Finshed"
-    elif(calibrationState == CalibrationState.FAILED):
-        # Failed Menu
-        message['text'] = "Calibration Failed"
+        self.calibrationState = CalibrationState.START
 
-# GUI Open Interrupt
-def Open():
-    global root
-    root.pack()
-    Update()
+    # View Update Interrupt
+    def Update(self):
+        if(self.calibrationState == CalibrationState.START):
+            # Start Menu
+            self.message['text'] = "Press button 1 to start calibration"
+        elif(self.calibrationState == CalibrationState.REQUEST_APPS_MIN):
+            # No Pedals Menu
+            self.message['text'] = "Release both pedals, then press button 1"
+        elif(self.calibrationState == CalibrationState.REQUEST_APPS_MAX):
+            # APPS Pedal Menu
+            self.message['text'] = "Press the throttle fully, then press button 1"
+        elif(self.calibrationState == CalibrationState.FINISHED):
+            # Finished Menu
+            self.message['text'] = "Calibration Finshed"
+        elif(self.calibrationState == CalibrationState.FAILED):
+            # Failed Menu
+            self.message['text'] = "Calibration Failed"
 
-# GUI Close Interrupt
-def Close():
-    global root
-    global calibrationState
-    root.forget()
-    calibrationState = CalibrationState.START
+    # Inputs
+    def InputInterrupt(self, interruptId):
+        if(interruptId == 1):
+            self.calibrationState = CalibrationState.START
+        if(interruptId == 0):
+            if(self.calibrationState == CalibrationState.START):
+                self.calibrationState = CalibrationState.REQUEST_APPS_MIN
 
-# Inputs
-def InputInterrupt(interruptId):
-    global calibrationState
-    global apps1CurrentMin
-    global apps1CurrentMax
-    global apps2RawCurrentMin
-    global apps2RawCurrentMax
-    
-    if(interruptId == 1):
-        calibrationState = CalibrationState.START
-    if(interruptId == 0):
-        if(calibrationState == CalibrationState.START):
-            calibrationState = CalibrationState.REQUEST_APPS_MIN
+            elif(self.calibrationState == CalibrationState.REQUEST_APPS_MIN):
+                self.apps1CurrentMin    = self.database.apps1
+                self.apps2RawCurrentMin = self.database.apps2Raw
+                self.calibrationState = CalibrationState.REQUEST_APPS_MAX
 
-        elif(calibrationState == CalibrationState.REQUEST_APPS_MIN):
-            apps1CurrentMin    = car_data.apps1
-            apps2RawCurrentMin = car_data.apps2Raw
-            calibrationState = CalibrationState.REQUEST_APPS_MAX
+            elif(self.calibrationState == CalibrationState.REQUEST_APPS_MAX):
+                self.apps1CurrentMax    = self.database.apps1
+                self.apps2RawCurrentMax = self.database.apps2Raw
+                self.ValidateCalibration()
+                self.ApplyCalibration()
 
-        elif(calibrationState == CalibrationState.REQUEST_APPS_MAX):
-            apps1CurrentMax    = car_data.apps1
-            apps2RawCurrentMax = car_data.apps2Raw
-            ValidateCalibration()
-            ApplyCalibration()
-    Update()
+    def ValidateCalibration(self):
+        self.calibrationState = CalibrationState.FAILED
+        if(self.apps1CurrentMin == None):    return
+        if(self.apps1CurrentMax == None):    return
+        if(self.apps2RawCurrentMin == None): return
+        if(self.apps2RawCurrentMax == None): return
+        if(self.apps1CurrentMin    >= self.apps1CurrentMax):    return
+        if(self.apps2RawCurrentMin >= self.apps2RawCurrentMax): return
+        self.calibrationState = CalibrationState.FINISHED
 
-def ValidateCalibration():
-    global calibrationState
-    global apps1CurrentMin
-    global apps1CurrentMax
-    global apps2RawCurrentMin
-    global apps2RawCurrentMax
+    def ApplyCalibration(self):
+        if(self.calibrationState != CalibrationState.FINISHED): return
+        self.database.apps1Min    = self.apps1CurrentMin
+        self.database.apps1Max    = self.apps1CurrentMax
+        self.database.apps2RawMin = self.apps2RawCurrentMin
+        self.database.apps2RawMax = self.apps2RawCurrentMax
+        can.SendCommandAppsCalibration(self.apps1CurrentMin, self.apps1CurrentMax, self.apps2RawCurrentMin, self.apps2RawCurrentMax)
 
-    # calibrationState = CalibrationState.FAILED
-    # if(apps1CurrentMin    >= apps1CurrentMax):    return
-    # if(apps2RawCurrentMin >= apps2RawCurrentMax): return
-    calibrationState = CalibrationState.FINISHED
-
-def ApplyCalibration():
-    global calibrationState
-    global apps1CurrentMin
-    global apps1CurrentMax
-    global apps2RawCurrentMin
-    global apps2RawCurrentMax
-
-    if(calibrationState != CalibrationState.FINISHED): return
-    car_data.apps1Min    = apps1CurrentMin
-    car_data.apps1Max    = apps1CurrentMax
-    car_data.apps2RawMin = apps2RawCurrentMin
-    car_data.apps2RawMax = apps2RawCurrentMax
-    can.SendCommandAppsCalibration()
+    def Close(self):
+        self.calibrationState = CalibrationState.START
+        super().Close()
