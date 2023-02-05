@@ -41,6 +41,12 @@ VAL_TABLE_ Fault_POST 1073741824 "Brake Shorted" 536870912 "Reserved" 268435456 
 VAL_TABLE_ Button 1 "High" 0 "Low" ;
 
 
+BO_ 1332 Calibrate_Brake_Range: 8 Vector__XXX
+ SG_ Brake_2_Real_Min : 32|10@1+ (1,0) [0|1023] "" Vector__XXX
+ SG_ Brake_2_Real_Max : 48|10@1+ (1,0) [0|1023] "" Vector__XXX
+ SG_ Brake_1_Real_Min : 0|10@1+ (1,0) [0|1023] "ADC" Vector__XXX
+ SG_ Brake_1_Real_Max : 16|10@1+ (1,0) [0|1023] "" Vector__XXX
+
 BO_ 256 Status_BMS_2: 8 BMS
  SG_ Voltage_BMS : 24|16@1+ (1,0) [0|65535] "Voltage" Vector__XXX
  SG_ Temperature_BMS_Max : 0|8@1+ (1,0) [0|255] "Celcius" Vector__XXX
@@ -70,11 +76,11 @@ BO_ 294 Data_Accelerometer_Angle: 8 Accelerometer
  SG_ Acceleration_Roll_Angle : 15|16@0+ (0.01962,-627.84) [-627.84|657.9567] "m/s^2" Vector__XXX
  SG_ Acceleration_Pitch_Angle : 31|16@0+ (0.01962,-627.84) [-627.84|657.9567] "m/s^2" Vector__XXX
 
-BO_ 1331 Command_APPS_Calibration: 8 Dashboard
- SG_ APPS_2_Raw_Min : 32|10@1+ (1,0) [0|1023] "ADC"  ECU
- SG_ APPS_2_Raw_Max : 48|10@1+ (1,0) [0|1023] "ADC"  ECU
- SG_ APPS_1_Min : 0|10@1+ (1,0) [0|1023] "ADC"  ECU
- SG_ APPS_1_Max : 16|10@1+ (1,0) [0|1023] "ADC"  ECU
+BO_ 1331 Calibrate_APPS_Range: 8 Dashboard
+ SG_ APPS_2_Real_Min : 32|10@1+ (1,0) [0|1023] "ADC"  ECU
+ SG_ APPS_2_Real_Max : 48|10@1+ (1,0) [0|1023] "ADC"  ECU
+ SG_ APPS_1_Real_Min : 0|10@1+ (1,0) [0|1023] "ADC"  ECU
+ SG_ APPS_1_Real_Max : 16|10@1+ (1,0) [0|1023] "ADC"  ECU
 
 BO_ 171 Error_Inverter_Fault: 8 Inverter
  SG_ Error_Run_Fault : 32|32@1+ (1,0) [0|4294967295] "Word"  ECU
@@ -189,11 +195,12 @@ CM_ BU_ Inverter "RMS PM100 DX Inverter";
 CM_ BU_ ACAN "Pedal Position Sensors";
 CM_ BU_ Dashboard "Vehicle Dashboard";
 CM_ BU_ ECU "Vehicle ECU";
+CM_ BO_ 1332 "Command to Update ECU Brake Ranges";
 CM_ BO_ 256 "Status of the Accumulator";
 CM_ BO_ 1088 "Status of the Accumulator";
 CM_ BO_ 295 "Acceleration Sensor Message";
 CM_ BO_ 294 "Acceleration Angle Message";
-CM_ BO_ 1331 "Command to update ECU calibration values";
+CM_ BO_ 1331 "Command to Update ECU APPS Ranges";
 CM_ BO_ 171 "Inverter Fault Message";
 CM_ SG_ 171 Error_Run_Fault "Inverter Run Fault Code";
 CM_ SG_ 171 Error_POST_Fault "Inverter POST Fault Code";

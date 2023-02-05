@@ -1,12 +1,26 @@
-# Libraries
+# Debug GUI View ----------------------------------------------------------------------------------------------------------
+# Author: Cole Barach
+# Date Created: 22.11.07
+# Date Updated: 23.01.30
+#   This module contains all objects related to the Debug View of the GUI. The Window object may be instanced to create a
+#   window capable of performing any debug behavior.
+
+# Libraries -------------------------------------------------------------------------------------------------------------------
 import tkinter
-
-# Includes
 import lib_tkinter
-import can
-import gui
 
+# Includes --------------------------------------------------------------------------------------------------------------------
+import gui
+import can_interface
+
+# Objects ---------------------------------------------------------------------------------------------------------------------
 class Window(gui.Window):
+    # Initialization
+    def __init__(self, gui, id, style, can):
+        super().__init__(gui, id, style)
+        self.can = can
+
+    # Open
     def Open(self):
         super().Open()
         self.root.title("Dashboard 2023 - Debug Module")
@@ -29,6 +43,7 @@ class Window(gui.Window):
         self.InitializeDataPedals            (dataPedalsRoot,             column0Width)
         self.InitializeStatusEcu             (statusEcuRoot,              column1Width)
 
+    # Breakout Initializers ---------------------------------------------------------------------------------------------------
     def InitializeInputPedals(self, inputPedalsRoot, width):
         # Partitioning
         buttonWidth = 40
@@ -168,33 +183,34 @@ class Window(gui.Window):
         self.voltageLvInput     = lib_tkinter.GetEntry(statusEcuRoot, minWidth=16, column=1, row=11, value=0, sticky="E", style=self.style)
         self.resistanceImdInput = lib_tkinter.GetEntry(statusEcuRoot, minWidth=16, column=1, row=12, value=0, sticky="E", style=self.style)
 
+    # Transmitters ------------------------------------------------------------------------------------------------------------
     def SendInputPedals(self):
         apps1  = int(self.apps1Input.get())
         apps2  = int(self.apps2Input.get())
         brake1 = int(self.brake1Input.get())
         brake2 = int(self.brake2Input.get())
-        can.SendInputPedals(apps1, apps2, brake1, brake2)
+        can_interface.SendInputPedals(self.can, apps1, apps2, brake1, brake2)
 
     def SendDataMotor(self):
         motorAngle         = int(self.motorAngleInput.get())
         motorRpm           = int(self.motorRpmInput.get())
         motorFrequency     = int(self.motorFrequencyInput.get())
         motorDeltaResolver = int(self.motorDeltaResolverInput.get())
-        can.SendDataMotor(motorAngle, motorRpm, motorFrequency, motorDeltaResolver)
+        can_interface.SendDataMotor(self.can, motorAngle, motorRpm, motorFrequency, motorDeltaResolver)
 
     def SendCommandAppsCalibration(self):
         apps1MinValue = int(self.apps1MinInput.get())
         apps1MaxValue = int(self.apps1MaxInput.get())
         apps2MinValue = int(self.apps2MinInput.get())
         apps2MaxValue = int(self.apps2MaxInput.get())
-        can.SendCommandAppsCalibration(apps1MinValue, apps1MaxValue, apps2MinValue, apps2MaxValue)
+        can_interface.SendCommandAppsCalibration(self.can, apps1MinValue, apps1MaxValue, apps2MinValue, apps2MaxValue)
 
     def SendDataPedals(self):
         apps1Percent  = int(self.apps1PercentInput.get())
         apps2Percent  = int(self.apps2PercentInput.get())
         brake1Percent = int(self.brake1PercentInput.get())
         brake2Percent = int(self.brake2PercentInput.get())
-        can.SendDataPedals(apps1Percent, apps2Percent, brake1Percent, brake2Percent)
+        can_interface.SendDataPedals(self.can, apps1Percent, apps2Percent, brake1Percent, brake2Percent)
 
     def SendStatusEcu(self):
         driveStateValue    = int(self.driveStateInput.get())
@@ -210,4 +226,4 @@ class Window(gui.Window):
         regenPercentValue  = int(self.regenPercentInput.get())
         voltageLvValue     = float(self.voltageLvInput.get())
         resistanceImdValue = float(self.resistanceImdInput.get())
-        can.SendStatusEcu(driveStateValue, acceleratingValue, brakingValue, drsValue, regenValue, is25_5Value, inverterValue, acanValue, is100msValue, torquePercentValue, regenPercentValue, voltageLvValue, resistanceImdValue)
+        can_interface.SendStatusEcu(self.can, driveStateValue, acceleratingValue, brakingValue, drsValue, regenValue, is25_5Value, inverterValue, acanValue, is100msValue, torquePercentValue, regenPercentValue, voltageLvValue, resistanceImdValue)

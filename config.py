@@ -1,4 +1,23 @@
-# CAN Bus -------------------------------------------------------------------------------------------------
+# Configuration Data ----------------------------------------------------------------------------------------------------------
+# Author: Cole Barach
+# Date Created: 22.09.28
+# Date Updated: 23.01.30
+#   This module contains all configurable data for the execution of the app. Values stored in this file
+#   may be referenced as needed throughout the program. These values should not change during runtime.
+
+# GUI -------------------------------------------------------------------------------------------------------------------------
+GUI_WIDTH                        = 800
+GUI_HEIGHT                       = 480
+
+GUI_FRAMERATE                    = 32
+
+GUI_DASH_STYLE                   = "style_Dash.json"
+GUI_DEBUG_STYLE                  = "style_Debug.json"
+
+# CAN Interface ---------------------------------------------------------------------------------------------------------------
+CAN_LIBRARY_TYPE                 = "INNOMAKER"
+
+# CAN Bus ---------------------------------------------------------------------------------------------------------------------
 CAN_BITRATE                      = 1000000                     # CAN Bitrate of 1 Megabit per Second
 CAN_ID_INPUT_PEDALS              = 0x005                       # ID of Input_Pedals
 CAN_ID_DATA_TEMP_1               = 0x0A0                       # ID of Data_Temperature_1
@@ -15,11 +34,13 @@ CAN_ID_STATUS_BMS                = 0x440                       # ID of Status_BM
 CAN_ID_DATA_PEDALS               = 0x701                       # ID of Data_Pedals
 CAN_ID_STATUS_ECU                = 0x703                       # ID of Status_ECU
 
-CAN_ID_COMMAND_APPS_CALIBRATION  = 0x533                       # ID of Command_APPS_Calibration
+CAN_ID_CALIBRATE_APPS_RANGE      = 0x533                       # ID of Calibrate_APPS_Range
+CAN_ID_CALIBRATE_BRAKE_RANGE     = 0x534                       # ID of Calibrate_Brake_Range
 
-canMessageTimeout                = 1                           # Length of Time for CAN Activity to Expire
+CAN_MESSAGE_TIMEOUT              = 1                           # Length of Time for CAN Activity to Expire
+CAN_TIME_PERIOD                  = 0.01                        # Period of Time Thread Update
 
-# CAN Data Interpretation ---------------------------------------------------------------------------------
+# CAN Data Interpretation -----------------------------------------------------------------------------------------------------
 RPM_MAX                          = 5500                        # Maximum RPM Value
 INVERTER_RPM_SCALE               = 1                           # Inverter RPM Scale Factor
 INVERTER_TEMP_SCALE              = 0.1                         # Inverter Temperature Scale Factor
@@ -36,7 +57,7 @@ PACK_TEMPERATURE_OFFSET          = 81.297                      # Pack Temperatur
 STATE_OF_CHARGE_SCALE            = 0.1                         # State of Charge Scale Factor
 PACK_CURRENT_LO_SCALE            = 0.01                        # Pack Current Lo Byte Scale Factor
 
-# Mechanical Data - 2022 ----------------------------------------------------------------------------------
+# Mechanical Data - 2022 ------------------------------------------------------------------------------------------------------
 RADIANS_PER_ROTATION             = 6.283185307                 # Number of Radians per Rotation (2 * PI)
 TIRE_RADIUS_INCHES               = 9                           # Radius of the Vehicle Rear Tire
 SPROCKET_TEETH_COUNT             = 40                          # Number of Teeth on Axle Sprocket

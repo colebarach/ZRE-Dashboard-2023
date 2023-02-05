@@ -1,53 +1,96 @@
+# CAN Interface ---------------------------------------------------------------------------------------------------------------
+# Author: Cole Barach
+# Date Created: 22.09.28
+# Date Updated: 23.01.30
+#   This module acts as the manager for anything relating to the CAN communications protocol.
+
 # Libraries
-import enum
-from enum import Enum
-
 import time
+import sys
 
-# Objects -------------------------------------------------------------------------------------------------
-class LibraryType(Enum):
-    EMULATE   = 0
-    CANLIB    = 1
-    INNOMAKER = 2
+import threading
+from threading import Thread
 
+# Includes
+import config
+
+# Objects ---------------------------------------------------------------------------------------------------------------------
+# CAN Interface
+# - Interface Object for CAN Libraries
+# - Objects inheriting from this may be used a CAN interface by the application
 class CanInterface():
-    def __init__(self, database, channelBitrates=[None], messageHandler=None):        
+    def __init__(self, database, messageHandler=None, timingFunction=None, timingPeriod=None):
+        print("CAN - Initializing...")
         self.database = database
         self.channels = []
         self.messageHandler = messageHandler
-        for index in range(len(channelBitrates)):
-            if(channelBitrates[index] == None):
-                continue
-            self.OpenChannel(channelBitrates[index], index)
+        self.timingFunction = timingFunction
+        self.timingPeriod   = timingPeriod
+        self.InitializeTimeThread()
     
-    def OpenChannel(self, bitrate, id):
-        self.channels.append(0)
-
-    def CloseChannel(self, channel):
-        return
-
+    # Main Loop
     def Begin(self):
-        return
+        print("CAN - Beginning...")
+        self.online = True
+        self.BeginTimeThread()
 
     def Kill(self):
-        return
+        print("CAN - Terminating...")
+        self.online = False
 
-# Imports -----------------------------------------------------------------------------------------------------
-import config
-import lib_canlib
+    # Messages
+    def Transmit(self, id, data, channel):
+        self.Receive(id, data)
 
+    def Receive(self, id, data):
+        self.messageHandler(self.database, id, data)
+
+    # Timing
+    def InitializeTimeThread(self):
+        if(self.timingFunction == None): return
+        self.timeThread = Thread(target=self.TimeThread)
+
+    def BeginTimeThread(self):
+        if(self.timeThread == None): return
+        self.timeThreadOnline = True
+        self.timeThread.start()
+
+    def TimeThread(self):
+        if(self.timeThread == None): return
+        while(self.online):
+            self.timingFunction(self.database)
+            time.sleep(self.timingPeriod)
+    
+# Functions -------------------------------------------------------------------------------------------------------------------
+# - Call this function to get an initialized CAN Interface Object
 def Setup(database):
-    library = LibraryType.CANLIB
+    if(config.CAN_LIBRARY_TYPE == "EMULATE"):
+        print("CAN - Using CAN Emulation.")
+        return CanInterface(database, messageHandler=HandleMessage, timingFunction=SetTimeouts, timingPeriod=config.CAN_TIME_PERIOD)
+    
+    if(config.CAN_LIBRARY_TYPE == "CANLIB"):
+        import lib_canlib
+        library = lib_canlib.Main(database, messageHandler=HandleMessage, timingFunction=SetTimeouts, timingPeriod=config.CAN_TIME_PERIOD)
+        library.OpenChannel(config.CAN_BITRATE, 0)
+        library.OpenChannel(config.CAN_BITRATE, 1)
+        return library
+        
+    if(config.CAN_LIBRARY_TYPE == "INNOMAKER"):
+        if(sys.platform == "win32"):
+            import lib_innomaker_win
+            library = lib_innomaker_win.Main(database, messageHandler=HandleMessage, timingFunction=SetTimeouts, timingPeriod=config.CAN_TIME_PERIOD)
+            library.OpenChannel(config.CAN_BITRATE, 0)
+            library.OpenChannel(config.CAN_BITRATE, 1)
+            return library
 
-    if(library == LibraryType.EMULATE):
-        return CanInterface(database, channelBitrates=[config.CAN_BITRATE]*2, messageHandler=HandleMessage)
-    if(library == LibraryType.CANLIB):
-        return lib_canlib.Main(database, channelBitrates=[config.CAN_BITRATE]*2, messageHandler=HandleMessage)
-    if(library == LibraryType.INNOMAKER):
-        print("CAN - INNOMAKER LIBRARY NOT SUPPORTED")
-    return CanInterface(database, channelBitrates=[], messageHandler=None)
+        if(sys.platform == "linux"):
+            import lib_innomaker_linux
+            library = lib_innomaker_linux.Main(database, messageHandler=HandleMessage, timingFunction=SetTimeouts, timingPeriod=config.CAN_TIME_PERIOD)
+            library.OpenChannel(config.CAN_BITRATE, 0)
+            library.OpenChannel(config.CAN_BITRATE, 1)
+            return library
 
-# Message Handling --------------------------------------------------------------------------------------------------------------------
+# Message Handling ------------------------------------------------------------------------------------------------------------
 
 # Handle Message
 # - Call to Interpret a CAN Message
@@ -61,6 +104,7 @@ def HandleMessage(database, id, data):
     if(id == config.CAN_ID_DATA_PEDALS):  HandleDataPedals(database, data)
     if(id == config.CAN_ID_STATUS_ECU):   HandleStatusEcu(database, data)
     if(id == config.CAN_ID_STATUS_BMS):   HandleStatusBms(database, data)
+    
     for index in range(config.CAN_ID_CELL_VOLTAGES_END - config.CAN_ID_CELL_VOLTAGES_START + 1):
         idIndex = config.CAN_ID_CELL_VOLTAGES_START + index
         if(id == idIndex): HandleCellVoltages(database, data, idIndex)
@@ -84,7 +128,7 @@ def HandleInputPedals(database, data):
     # Bytes 6 & 7
     database.brake2   = data[6] | (data[7] << 8)
     # Timeout
-    ClearTimeoutAcan()
+    ClearTimeoutAcan(database)
 
 # Message 0x0A0 - Temperature Data from Inverter 
 def HandleDataTemperature1(database, data):
@@ -97,22 +141,22 @@ def HandleDataTemperature1(database, data):
     # Bytes 6 & 7
     database.inverterTempGdb     = (data[7] >> 8 | data[6]) * config.INVERTER_TEMP_SCALE
     # Timeout & Calculations
-    CalculateInverterStats()
-    ClearTimeoutInverter()
+    CalculateInverterStats(database)
+    ClearTimeoutInverter(database)
 
 # Message 0x0A1 - Temperature Data from Inverter
 def HandleDataTemperature2(database, data):
     # Bytes 0 & 1
     database.inverterTempCb = (data[1] >> 8 | data[0]) * config.INVERTER_TEMP_SCALE
     # Timeout
-    ClearTimeoutInverter()
+    ClearTimeoutInverter(database)
 
 # Message 0x0A2 - Temperature Data from Inverter
 def HandleDataTemperature3Torque(database, data):
     # Bytes 4 & 5
     database.motorTemperature = (data[5] >> 8 | data[4]) * config.INVERTER_TEMP_SCALE
     # Timeout
-    ClearTimeoutInverter()
+    ClearTimeoutInverter(database)
 
 # Message 0x0A5 - Motor Data from Inverter
 def HandleDataMotor(database, data):
@@ -120,7 +164,7 @@ def HandleDataMotor(database, data):
     database.motorRpm      = InterpretSignedNBitInt(data[2] | (data[3] << 8)) * config.INVERTER_RPM_SCALE
     database.motorSpeedMph = int(abs(RpmToMph(database.motorRpm)))
     # Timeout
-    ClearTimeoutInverter()
+    ClearTimeoutInverter(database)
 
 # Message 0x701 - Pedal Data from ECU
 def HandleDataPedals(database, data):
@@ -133,22 +177,25 @@ def HandleDataPedals(database, data):
     # Byte 3
     database.brake2Percent = (data[6] | (data[7] << 8)) * config.BRAKE_2_PERCENT_SCALE
     # Timeout
-    ClearTimeoutEcu()
+    ClearTimeoutEcu(database)
 
 # Message 0x703 - Status Message from ECU
 def HandleStatusEcu(database, data):
     # Byte 0
     driveState = data[0] & 0b00000011
-    database.SetDriveState(driveState)
-    database.accelerating          = data[0] & 0b00000100
-    database.braking               = data[0] & 0b00001000
-    database.drsState              = data[0] & 0b00010000
-    database.regenState            = data[0] & 0b00100000
+    if(driveState == 0): database.driveState = database.DriveState.INITIALIZING
+    if(driveState == 1): database.driveState = database.DriveState.LV_DRIVEOFF
+    if(driveState == 2): database.driveState = database.DriveState.HV_DRIVEOFF
+    if(driveState == 3): database.driveState = database.DriveState.HV_DRIVEON
+    database.accelerating          = bool((data[0] >> 2) & 0b1)
+    database.braking               = bool((data[0] >> 3) & 0b1)
+    database.drsState              = bool((data[0] >> 4) & 0b1)
+    database.regenState            = bool((data[0] >> 5) & 0b1)
     # Byte 1
-    database.error25_5Implausible  = data[1] & 0b00000001
-    database.errorInverterFault    = data[1] & 0b00000010
-    database.errorAcanImplausible  = data[1] & 0b00000100
-    database.error100MsImplausible = data[1] & 0b00001000
+    database.error25_5Implausible  = bool((data[1] >> 0) & 0b1)
+    database.errorInverterFault    = bool((data[1] >> 1) & 0b1)
+    database.errorAcanImplausible  = bool((data[1] >> 2) & 0b1)
+    database.error100MsImplausible = bool((data[1] >> 3) & 0b1)
     # Byte 2
     database.torquePercentageMax   = data[2]
     # Byte 3
@@ -156,7 +203,7 @@ def HandleStatusEcu(database, data):
     # Bytes 4 & 5
     database.lvBatteryVoltage = (data[4] | (data[5] << 8)) * config.LV_BATTERY_VOLTAGE_SCALE
     # Timeout
-    ClearTimeoutEcu()
+    ClearTimeoutEcu(database)
 
 # Messages 0x401 - 0x417 - Cell Voltages from BMS
 def HandleCellVoltages(database, data, id):
@@ -176,7 +223,7 @@ def HandleCellVoltages(database, data, id):
     database.cellVoltages[cellOffset+3] = (data[7] | (data[6] << 8)) * config.CELL_VOLTAGE_SCALE
     
     # Timeout
-    ClearTimeoutBms()
+    ClearTimeoutBms(database)
 
 # Messages 0x418 - 0x41A - Cell Balancings from BMS
 def HandleCellBalancings(database, data, id):
@@ -229,7 +276,7 @@ def HandleCellBalancings(database, data, id):
     database.cellBalancings[cellOffset+35] = bool((data[5] >> 1) & 0b1)
     
     # Timeout
-    ClearTimeoutBms()
+    ClearTimeoutBms(database)
 
 # Messages 0x41B - 0x426 - Pack Temperatures from BMS
 def HandlePackTemperatures(database, data, id):
@@ -250,7 +297,7 @@ def HandlePackTemperatures(database, data, id):
     database.packTemperatures[packOffset+3] = (data[7] | (data[6] << 8)) * config.PACK_TEMPERATURE_SCALE + config.PACK_TEMPERATURE_OFFSET
     
     # Timeout
-    ClearTimeoutBms()
+    ClearTimeoutBms(database)
 
 # Message 0x440 - Status Message from BMS
 def HandleStatusBms(database, data):
@@ -264,9 +311,9 @@ def HandleStatusBms(database, data):
     database.errorBmsSelfTestFault  = bool((data[6] >> 2) & 0b1)
     database.errorBmsSenseLineFault = bool((data[6] >> 4) & 0b1)
     # Timeout
-    CalculateBmsStats() 
+    CalculateBmsStats(database) 
 
-# Data Extrapolation ------------------------------------------------------------------------------------------------------------------
+# Data Extrapolation ----------------------------------------------------------------------------------------------------------
 def CalculateInverterStats(database):
     database.inverterTempMean = None
     database.inverterTempMax  = None
@@ -334,21 +381,31 @@ def CalculateBmsStats(database):
         tempCount += 1
     if(tempCount != 0): database.packTemperatureMean /= tempCount
 
-# Message Timeouts ----------------------------------------------------------------------------------------
+# Message Timeouts ------------------------------------------------------------------------------------------------------------
+def SetTimeouts(database):
+    database.time = time.time()
+    if(database.ecuCanTimeout      == None or database.time > database.ecuCanTimeout      + config.CAN_MESSAGE_TIMEOUT): database.ecuCanActive      = False
+    if(database.acanCanTimeout     == None or database.time > database.acanCanTimeout     + config.CAN_MESSAGE_TIMEOUT): database.acanCanActive     = False
+    if(database.inverterCanTimeout == None or database.time > database.inverterCanTimeout + config.CAN_MESSAGE_TIMEOUT): database.inverterCanActive = False
+    if(database.bmsCanTimeout      == None or database.time > database.bmsCanTimeout      + config.CAN_MESSAGE_TIMEOUT): database.bmsCanActive      = False
+
 def ClearTimeoutEcu(database):
     database.ecuCanTimeout = time.time()
     database.ecuCanActive = True
+
 def ClearTimeoutAcan(database):
     database.acanCanTimeout = time.time()
     database.acanCanActive = True
+
 def ClearTimeoutInverter(database):
     database.inverterCanTimeout = time.time()
     database.inverterCanActive = True
+
 def ClearTimeoutBms(database):
     database.bmsCanTimeout = time.time()
     database.bmsCanActive = True
 
-# Data Interpretation -------------------------------------------------------------------------------------
+# Data Interpretation ---------------------------------------------------------------------------------------------------------
 def InterpretSignedNBitInt(value, bitCount=16):
     if(value > 2 ** (bitCount-1)): value -= 2 ** bitCount
     return value
@@ -358,12 +415,12 @@ def RpmToMph(rotationsPerMinute):
     speedMph = radiansPerMinute * config.TIRE_RADIUS_INCHES * config.MINUTES_PER_HOUR / (config.INCHES_PER_FOOT * config.FEET_PER_MILE)
     return speedMph
 
-# Message Transmitting ----------------------------------------------------------------------------------------------------------------
-def SendMessage(transmitter, id, data, channel=1):
-    if(channel == 0): transmitter.Send(id, data, channel)
+# Message Transmitting --------------------------------------------------------------------------------------------------------
+def SendMessage(transmitter, id, data, channel=0):
+    transmitter.Transmit(id, data, channel)
 
 # Message 0x533
-def SendCommandAppsCalibration(transmitter, apps1MinValue, apps1MaxValue, apps2MinValue, apps2MaxValue):
+def SendCalibrationAppsRange(transmitter, apps1MinValue, apps1MaxValue, apps2MinValue, apps2MaxValue):
     message = [0,0,0,0,0,0,0,0]
 
     message[0] = (apps1MinValue)      & 0xFF
@@ -375,7 +432,22 @@ def SendCommandAppsCalibration(transmitter, apps1MinValue, apps1MaxValue, apps2M
     message[6] = (apps2MaxValue)      & 0xFF
     message[7] = (apps2MaxValue >> 8) & 0xFF
     
-    SendMessage(transmitter, config.CAN_ID_COMMAND_APPS_CALIBRATION, message)
+    SendMessage(transmitter, config.CAN_ID_CALIBRATE_APPS_RANGE, message)
+
+# Message 0x534
+def SendCalibrationBrakeRange(transmitter, brake1MinValue, brake1MaxValue, brake2MinValue, brake2MaxValue):
+    message = [0,0,0,0,0,0,0,0]
+
+    message[0] = (brake1MinValue)      & 0xFF
+    message[1] = (brake1MinValue >> 8) & 0xFF
+    message[2] = (brake1MaxValue)      & 0xFF
+    message[3] = (brake1MaxValue >> 8) & 0xFF
+    message[4] = (brake2MinValue)      & 0xFF
+    message[5] = (brake2MinValue >> 8) & 0xFF
+    message[6] = (brake2MaxValue)      & 0xFF
+    message[7] = (brake2MaxValue >> 8) & 0xFF
+    
+    SendMessage(transmitter, config.CAN_ID_CALIBRATE_BRAKE_RANGE, message)
 
 # Message 0x005
 def SendInputPedals(transmitter, apps1, apps2, brake1, brake2):

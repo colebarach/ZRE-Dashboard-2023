@@ -6,20 +6,25 @@ The main file for the application, execute this file to instance the app. This f
 
 # GUI - gui.py
 The GUI module contains everything for managing the TKinter GUI.
+
 ## gui.Main
 ### Constructor
 This object, when instanced, will setup an empty TKinter window. An interface for a database, views, subwindows, and interrupts will be established.
 
 *Due to the structure of TK, this class can only be instanced once per application.*
+
 ### Append View
 Call this method to insert a View Object into the list of GUI views. The first object appended will act as the default view, being opened when **CloseViews()** is called. The Views in this list can be accessed using **OpenView()**
+
 ### Open View
 After views have been properly initialized and appended, this method may be called to **Open()** a specific view by ID or by reference. This function will **Close()** the currently opened view, then **Open()** the desired view.
+
 ### Close Views
 After views have been properly initialized and appended, this method may be called to **Close()** the currently opened view. The view that is in position 0 of the views list will be opened.
 
 ### Append Window
 Call this method to insert a Window Object into the list of GUI subwindows.
+
 ### Toggle Window
 After windows have been properly initialized and appended, this method may be called to **Toggle()** a specific window by ID or by reference. If the specified window is currently open, it will be closed, and vice-versa.
 
